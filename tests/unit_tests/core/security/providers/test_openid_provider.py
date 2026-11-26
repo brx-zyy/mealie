@@ -590,9 +590,11 @@ def test_provider_own_host_is_allowed_on_a_private_network(
     [
         "http://idp.example.com:18443/internal-health",
         "https://idp.example.com:18443/internal-health",
+        "http://idp.example.com:443/internal-health",
+        "https://idp.example.com:80/internal-health",
     ],
 )
-def test_provider_own_host_arbitrary_port_is_rejected(
+def test_provider_own_host_unapproved_port_is_rejected(
     _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str
 ):
     """The private-network exception must not expose other services on the IdP host."""
