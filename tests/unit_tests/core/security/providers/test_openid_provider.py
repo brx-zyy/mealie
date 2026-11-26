@@ -585,14 +585,20 @@ def test_provider_own_host_is_allowed_on_a_private_network(
     assert requested == [url]
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://idp.example.com:18443/internal-health",
+        "https://idp.example.com:18443/internal-health",
+    ],
+)
 def test_provider_own_host_arbitrary_port_is_rejected(
-    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str
 ):
     """The private-network exception must not expose other services on the IdP host."""
     _resolve_to(monkeypatch, "192.168.1.10")
     unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
 
-    url = "http://idp.example.com:18443/internal-health"
     requested = _patch_network(monkeypatch, [])
 
     data = _picture_claims(url)
@@ -716,6 +722,27 @@ def test_refuses_redirect_to_a_private_address(_oidc_env, monkeypatch: MonkeyPat
     assert _authenticate_with_picture(unique_user, "https://cdn.example.com/a.png") is not None
 
     # The redirect target is never connected to.
+    assert requested == ["https://cdn.example.com/a.png"]
+    after = unique_user.repos.users.get_one(unique_user.user_id)
+    assert after is not None
+    assert after.external_avatar_hash is None
+
+
+def test_refuses_redirect_to_arbitrary_port_on_provider_host(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
+):
+    """A public avatar host cannot redirect the fetch to another service on the IdP host."""
+    _resolve_hosts(monkeypatch, {"idp.example.com": "192.168.1.10"})
+    unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
+
+    requested = _patch_network(
+        monkeypatch,
+        [_redirect("http://idp.example.com:18443/internal-health")],
+    )
+
+    assert _authenticate_with_picture(unique_user, "https://cdn.example.com/a.png") is not None
+
+    # The redirect target is rejected by the per-hop request hook before transport.
     assert requested == ["https://cdn.example.com/a.png"]
     after = unique_user.repos.users.get_one(unique_user.user_id)
     assert after is not None
