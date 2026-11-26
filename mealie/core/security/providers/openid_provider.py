@@ -207,10 +207,12 @@ class OpenIDProvider(AuthProvider[UserInfo]):
 
                 # The provider-host exception is needed for self-hosted IdPs on a LAN,
                 # but it must not turn that hostname into a proxy for arbitrary services
-                # listening on other ports of the same machine. Keep the conventional
-                # HTTP(S) ports and the configured provider port only.
+                # listening on other ports of the same machine. Allow the URL's conventional
+                # port, plus the configured provider endpoint only when its scheme also matches.
+                scheme_default_port = 443 if parsed.scheme == "https" else 80
                 provider_port = provider.port or (443 if provider.scheme == "https" else 80)
-                return picture_port in {80, 443, provider_port}
+                is_provider_endpoint = parsed.scheme == provider.scheme and picture_port == provider_port
+                return picture_port == scheme_default_port or is_provider_endpoint
 
         if parsed.scheme != "https":
             self._logger.warning("[OIDC] refusing to fetch profile image over a non-HTTPS URL")
