@@ -1,0 +1,47 @@
+name: Security proof - FlareSolverr browser SSRF
+
+on:
+  push:
+    branches:
+      - security/flaresolverr-ssrf-live-proof
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-browser-ssrf-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create isolated Docker network and mock endpoints
+        run: |
+          set -eux
+          docker network create ssrf-proof
+          docker run -d --name proof-mock --network ssrf-proof \
+            --network-alias attacker-proof --network-alias internal-proof \
+            -v "$GITHUB_WORKSPACE/.github/security-proof/mock_server.py:/mock_server.py:ro" \
+            python:3.12-alpine python /mock_server.py
+
+      - name: Start FlareSolverr
+        run: |
+          docker run -d --name proof-flaresolverr --network ssrf-proof \
+            -p 8191:8191 -e LOG_LEVEL=info flaresolverr/flaresolverr:latest
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8191/ >/dev/null; then break; fi
+            sleep 3
+          done
+
+      - name: Trigger challenge redirect and verify private response
+        run: |
+          python .github/security-proof/test_flaresolverr.py
+          docker logs proof-mock 2>&1 | tee /tmp/mock.log
+          grep -q 'PRIVATE_PROOF_REQUEST_RECEIVED path=/proof' /tmp/mock.log
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f proof-flaresolverr proof-mock || true
+          docker network rm ssrf-proof || true
