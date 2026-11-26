@@ -592,6 +592,8 @@ def test_provider_own_host_is_allowed_on_a_private_network(
         "https://idp.example.com:18443/internal-health",
         "http://idp.example.com:443/internal-health",
         "https://idp.example.com:80/internal-health",
+        "http://idp.example.com:0/internal-health",
+        "https://idp.example.com:0/internal-health",
     ],
 )
 def test_provider_own_host_unapproved_port_is_rejected(
