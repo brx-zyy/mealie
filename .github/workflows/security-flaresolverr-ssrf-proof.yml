@@ -21,9 +21,23 @@ jobs:
           set -eux
           docker network create ssrf-proof
           docker run -d --name proof-mock --network ssrf-proof \
-            --network-alias attacker-proof --network-alias internal-proof \
+            --network-alias internal-proof \
             -v "$GITHUB_WORKSPACE/.github/security-proof/mock_server.py:/mock_server.py:ro" \
             python:3.12-alpine python /mock_server.py
+
+      - name: Publish the challenge endpoint through a temporary public tunnel
+        run: |
+          set -eux
+          docker run -d --name proof-tunnel --network ssrf-proof \
+            cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://proof-mock:8080
+          for i in $(seq 1 60); do
+            PUBLIC_HOST=$(docker logs proof-tunnel 2>&1 | grep -Eo 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | head -n1 || true)
+            if [ -n "$PUBLIC_HOST" ]; then break; fi
+            sleep 2
+          done
+          test -n "$PUBLIC_HOST"
+          echo "SSRF_PROOF_PUBLIC_URL=$PUBLIC_HOST/challenge" >> "$GITHUB_ENV"
+          echo "Using temporary public challenge host: $PUBLIC_HOST"
 
       - name: Start FlareSolverr
         run: |
@@ -49,7 +63,8 @@ jobs:
             -e SECRET=proof-secret-not-for-production \
             -e SESSION_SECRET=proof-session-secret-not-for-production \
             -e DB_ENGINE=sqlite \
-            -e HTTP_ALLOW_LIST=attacker-proof \
+            -e HTTP_ALLOW_LIST=mealie-proof.invalid \
+            -e SSRF_PROOF_PUBLIC_URL="$SSRF_PROOF_PUBLIC_URL" \
             -e SCRAPER_FLARESOLVERR_URL=http://proof-flaresolverr:8191 \
             -e SCRAPER_FLARESOLVERR_TIMEOUT=60 \
             -v "$GITHUB_WORKSPACE:/src" \
@@ -62,5 +77,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f proof-flaresolverr proof-mock proof-mealie || true
+          docker rm -f proof-flaresolverr proof-tunnel proof-mock proof-mealie || true
           docker network rm ssrf-proof || true
