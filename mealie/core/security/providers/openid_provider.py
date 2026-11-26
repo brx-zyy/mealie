@@ -192,27 +192,32 @@ class OpenIDProvider(AuthProvider[UserInfo]):
         try:
             parsed = urlparse(url)
             host = parsed.hostname
-            picture_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            picture_port = parsed.port
+            provider = (
+                urlparse(settings.OIDC_CONFIGURATION_URL) if settings.OIDC_CONFIGURATION_URL else None
+            )
+            provider_host = provider.hostname if provider else None
+            provider_port = provider.port if provider else None
         except ValueError:
             return False
 
         if not host:
             return False
 
-        if settings.OIDC_CONFIGURATION_URL:
-            provider = urlparse(settings.OIDC_CONFIGURATION_URL)
-            if host == provider.hostname:
-                if parsed.scheme not in ("http", "https"):
-                    return False
+        if provider and host == provider_host:
+            if parsed.scheme not in ("http", "https"):
+                return False
 
-                # The provider-host exception is needed for self-hosted IdPs on a LAN,
-                # but it must not turn that hostname into a proxy for arbitrary services
-                # listening on other ports of the same machine. Allow the URL's conventional
-                # port, plus the configured provider endpoint only when its scheme also matches.
-                scheme_default_port = 443 if parsed.scheme == "https" else 80
-                provider_port = provider.port or (443 if provider.scheme == "https" else 80)
-                is_provider_endpoint = parsed.scheme == provider.scheme and picture_port == provider_port
-                return picture_port == scheme_default_port or is_provider_endpoint
+            # The provider-host exception is needed for self-hosted IdPs on a LAN,
+            # but it must not turn that hostname into a proxy for arbitrary services
+            # listening on other ports of the same machine. Allow the URL's conventional
+            # port, plus the configured provider endpoint only when its scheme also matches.
+            scheme_default_port = 443 if parsed.scheme == "https" else 80
+            picture_port = picture_port if picture_port is not None else scheme_default_port
+            provider_default_port = 443 if provider.scheme == "https" else 80
+            provider_port = provider_port if provider_port is not None else provider_default_port
+            is_provider_endpoint = parsed.scheme == provider.scheme and picture_port == provider_port
+            return picture_port == scheme_default_port or is_provider_endpoint
 
         if parsed.scheme != "https":
             self._logger.warning("[OIDC] refusing to fetch profile image over a non-HTTPS URL")
