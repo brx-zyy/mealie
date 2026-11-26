@@ -193,9 +193,7 @@ class OpenIDProvider(AuthProvider[UserInfo]):
             parsed = urlparse(url)
             host = parsed.hostname
             picture_port = parsed.port
-            provider = (
-                urlparse(settings.OIDC_CONFIGURATION_URL) if settings.OIDC_CONFIGURATION_URL else None
-            )
+            provider = urlparse(settings.OIDC_CONFIGURATION_URL) if settings.OIDC_CONFIGURATION_URL else None
             provider_host = provider.hostname if provider else None
             provider_port = provider.port if provider else None
         except ValueError:
