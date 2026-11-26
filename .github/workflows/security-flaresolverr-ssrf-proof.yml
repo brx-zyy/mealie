@@ -12,7 +12,7 @@ permissions:
 jobs:
   end-to-end-mealie-ssrf-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -38,20 +38,23 @@ jobs:
       - name: Build Mealie production image from this commit
         run: docker build --target production -f docker/Dockerfile -t mealie-ssrf-proof .
 
-      - name: Run Mealie's real safehttp fallback against the isolated services
+      - name: Run authenticated recipe-import integration test
         run: |
           set -eux
           docker run --rm --name proof-mealie --network ssrf-proof \
-            --entrypoint python \
+            --entrypoint /bin/sh \
             -e PRODUCTION=true \
+            -e TESTING=true \
+            -e ALLOW_SIGNUP=true \
             -e SECRET=proof-secret-not-for-production \
             -e SESSION_SECRET=proof-session-secret-not-for-production \
             -e DB_ENGINE=sqlite \
             -e HTTP_ALLOW_LIST=attacker-proof \
             -e SCRAPER_FLARESOLVERR_URL=http://proof-flaresolverr:8191 \
             -e SCRAPER_FLARESOLVERR_TIMEOUT=60 \
-            -v "$GITHUB_WORKSPACE/.github/security-proof/test_mealie_fallback.py:/test_mealie_fallback.py:ro" \
-            mealie-ssrf-proof /test_mealie_fallback.py
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            -w /src \
+            mealie-ssrf-proof -c 'pip install pytest && python -m pytest -q -s tests/integration_tests/user_recipe_tests/test_flaresolverr_ssrf.py'
           docker logs proof-mock 2>&1 | tee /tmp/mock.log
           grep -q 'GET /challenge' /tmp/mock.log
           grep -q 'PRIVATE_PROOF_REQUEST_RECEIVED path=/proof' /tmp/mock.log
