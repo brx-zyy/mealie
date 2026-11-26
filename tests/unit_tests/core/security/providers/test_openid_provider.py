@@ -611,6 +611,23 @@ def test_provider_own_host_unapproved_port_is_rejected(
     assert requested == []
 
 
+def test_configured_provider_custom_port_is_allowed(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
+):
+    """A self-hosted IdP on a configured non-standard port remains usable."""
+    monkeypatch.setenv(
+        "OIDC_CONFIGURATION_URL",
+        "https://idp.example.com:8443/.well-known/openid-configuration",
+    )
+    get_app_settings.cache_clear()
+    try:
+        provider = OpenIDProvider(unique_user.repos.session, _picture_claims())
+        assert provider._is_safe_picture_scheme("https://idp.example.com:8443/pic.png")
+        assert not provider._is_safe_picture_scheme("http://idp.example.com:8443/pic.png")
+    finally:
+        get_app_settings.cache_clear()
+
+
 def test_oversized_declared_content_length_is_refused(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
     _resolve_to(monkeypatch, "93.184.216.34")
     unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
