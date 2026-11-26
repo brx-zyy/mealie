@@ -189,13 +189,31 @@ class OpenIDProvider(AuthProvider[UserInfo]):
         per redirect hop, rather than here.
         """
         settings = get_app_settings()
-        parsed = urlparse(url)
-        host = parsed.hostname
+        try:
+            parsed = urlparse(url)
+            host = parsed.hostname
+            picture_port = parsed.port
+            provider = urlparse(settings.OIDC_CONFIGURATION_URL) if settings.OIDC_CONFIGURATION_URL else None
+            provider_host = provider.hostname if provider else None
+            provider_port = provider.port if provider else None
+        except ValueError:
+            return False
+
         if not host:
             return False
 
-        if settings.OIDC_CONFIGURATION_URL and host == urlparse(settings.OIDC_CONFIGURATION_URL).hostname:
-            return parsed.scheme in ("http", "https")
+        if provider and host == provider_host:
+            if parsed.scheme not in ("http", "https"):
+                return False
+
+            # The private-network exception must be limited to the configured IdP
+            # origin. Allowing either conventional port would expose unrelated services
+            # on the same host (for example, HTTP on port 80 beside an HTTPS IdP on 8443).
+            scheme_default_port = 443 if parsed.scheme == "https" else 80
+            picture_port = picture_port if picture_port is not None else scheme_default_port
+            provider_default_port = 443 if provider.scheme == "https" else 80
+            provider_port = provider_port if provider_port is not None else provider_default_port
+            return parsed.scheme == provider.scheme and picture_port == provider_port
 
         if parsed.scheme != "https":
             self._logger.warning("[OIDC] refusing to fetch profile image over a non-HTTPS URL")

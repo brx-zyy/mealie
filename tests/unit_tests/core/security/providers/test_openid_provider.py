@@ -568,7 +568,7 @@ def test_disallow_list_blocks_a_public_avatar_host(monkeypatch: MonkeyPatch, ses
         get_app_settings.cache_clear()
 
 
-@pytest.mark.parametrize("url", ["https://idp.example.com/pic.png", "http://idp.example.com/pic.png"])
+@pytest.mark.parametrize("url", ["https://idp.example.com/pic.png"])
 def test_provider_own_host_is_allowed_on_a_private_network(
     _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str
 ):
@@ -583,6 +583,75 @@ def test_provider_own_host_is_allowed_on_a_private_network(
     assert OpenIDProvider(unique_user.repos.session, data).authenticate() is not None
 
     assert requested == [url]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://idp.example.com:18443/internal-health",
+        "https://idp.example.com:18443/internal-health",
+        "http://idp.example.com:443/internal-health",
+        "https://idp.example.com:80/internal-health",
+        "http://idp.example.com:0/internal-health",
+        "https://idp.example.com:0/internal-health",
+    ],
+)
+def test_provider_own_host_unapproved_port_is_rejected(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str
+):
+    """The private-network exception must not expose other services on the IdP host."""
+    _resolve_to(monkeypatch, "192.168.1.10")
+    unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
+
+    requested = _patch_network(monkeypatch, [])
+
+    data = _picture_claims(url)
+    data["email"] = unique_user.email
+    assert OpenIDProvider(unique_user.repos.session, data).authenticate() is not None
+
+    # The request hook rejects the port before the transport can connect.
+    assert requested == []
+
+
+def test_configured_provider_custom_port_is_allowed(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
+    """A self-hosted IdP on a configured non-standard port remains usable."""
+    monkeypatch.setenv(
+        "OIDC_CONFIGURATION_URL",
+        "https://idp.example.com:8443/.well-known/openid-configuration",
+    )
+    get_app_settings.cache_clear()
+    try:
+        provider = OpenIDProvider(unique_user.repos.session, _picture_claims())
+        assert provider._is_safe_picture_scheme("https://idp.example.com:8443/pic.png")
+        assert not provider._is_safe_picture_scheme("http://idp.example.com:8443/pic.png")
+    finally:
+        get_app_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://idp.example.com:8443/pic.png", True),
+        ("http://idp.example.com:8443/pic.png", False),
+        ("https://idp.example.com:443/pic.png", False),
+        ("http://idp.example.com:80/pic.png", False),
+        ("http://idp.example.com:443/pic.png", False),
+        ("https://idp.example.com:80/pic.png", False),
+    ],
+)
+def test_provider_host_port_and_scheme_policy(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str, expected: bool
+):
+    monkeypatch.setenv(
+        "OIDC_CONFIGURATION_URL",
+        "https://idp.example.com:8443/.well-known/openid-configuration",
+    )
+    get_app_settings.cache_clear()
+    try:
+        provider = OpenIDProvider(unique_user.repos.session, _picture_claims())
+        assert provider._is_safe_picture_scheme(url) is expected
+    finally:
+        get_app_settings.cache_clear()
 
 
 def test_oversized_declared_content_length_is_refused(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
@@ -698,6 +767,27 @@ def test_refuses_redirect_to_a_private_address(_oidc_env, monkeypatch: MonkeyPat
     assert _authenticate_with_picture(unique_user, "https://cdn.example.com/a.png") is not None
 
     # The redirect target is never connected to.
+    assert requested == ["https://cdn.example.com/a.png"]
+    after = unique_user.repos.users.get_one(unique_user.user_id)
+    assert after is not None
+    assert after.external_avatar_hash is None
+
+
+def test_refuses_redirect_to_arbitrary_port_on_provider_host(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
+):
+    """A public avatar host cannot redirect the fetch to another service on the IdP host."""
+    _resolve_hosts(monkeypatch, {"idp.example.com": "192.168.1.10"})
+    unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
+
+    requested = _patch_network(
+        monkeypatch,
+        [_redirect("https://idp.example.com:18443/internal-health")],
+    )
+
+    assert _authenticate_with_picture(unique_user, "https://cdn.example.com/a.png") is not None
+
+    # The redirect target is rejected by the per-hop request hook before transport.
     assert requested == ["https://cdn.example.com/a.png"]
     after = unique_user.repos.users.get_one(unique_user.user_id)
     assert after is not None
