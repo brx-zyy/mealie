@@ -628,6 +628,32 @@ def test_configured_provider_custom_port_is_allowed(
         get_app_settings.cache_clear()
 
 
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://idp.example.com:8443/pic.png", True),
+        ("http://idp.example.com:8443/pic.png", False),
+        ("https://idp.example.com:443/pic.png", True),
+        ("http://idp.example.com:80/pic.png", True),
+        ("http://idp.example.com:443/pic.png", False),
+        ("https://idp.example.com:80/pic.png", False),
+    ],
+)
+def test_provider_host_port_and_scheme_policy(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str, expected: bool
+):
+    monkeypatch.setenv(
+        "OIDC_CONFIGURATION_URL",
+        "https://idp.example.com:8443/.well-known/openid-configuration",
+    )
+    get_app_settings.cache_clear()
+    try:
+        provider = OpenIDProvider(unique_user.repos.session, _picture_claims())
+        assert provider._is_safe_picture_scheme(url) is expected
+    finally:
+        get_app_settings.cache_clear()
+
+
 def test_oversized_declared_content_length_is_refused(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
     _resolve_to(monkeypatch, "93.184.216.34")
     unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
