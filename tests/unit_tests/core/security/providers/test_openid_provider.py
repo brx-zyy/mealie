@@ -613,9 +613,7 @@ def test_provider_own_host_unapproved_port_is_rejected(
     assert requested == []
 
 
-def test_configured_provider_custom_port_is_allowed(
-    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
-):
+def test_configured_provider_custom_port_is_allowed(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
     """A self-hosted IdP on a configured non-standard port remains usable."""
     monkeypatch.setenv(
         "OIDC_CONFIGURATION_URL",
