@@ -782,7 +782,7 @@ def test_refuses_redirect_to_arbitrary_port_on_provider_host(
 
     requested = _patch_network(
         monkeypatch,
-        [_redirect("http://idp.example.com:18443/internal-health")],
+        [_redirect("https://idp.example.com:18443/internal-health")],
     )
 
     assert _authenticate_with_picture(unique_user, "https://cdn.example.com/a.png") is not None
