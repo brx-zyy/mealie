@@ -24,3 +24,5 @@ async def main() -> None:
 
 
 asyncio.run(main())
+
+# Trigger end-to-end workflow after adding the Mealie integration step.
