@@ -189,13 +189,28 @@ class OpenIDProvider(AuthProvider[UserInfo]):
         per redirect hop, rather than here.
         """
         settings = get_app_settings()
-        parsed = urlparse(url)
-        host = parsed.hostname
+        try:
+            parsed = urlparse(url)
+            host = parsed.hostname
+            picture_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        except ValueError:
+            return False
+
         if not host:
             return False
 
-        if settings.OIDC_CONFIGURATION_URL and host == urlparse(settings.OIDC_CONFIGURATION_URL).hostname:
-            return parsed.scheme in ("http", "https")
+        if settings.OIDC_CONFIGURATION_URL:
+            provider = urlparse(settings.OIDC_CONFIGURATION_URL)
+            if host == provider.hostname:
+                if parsed.scheme not in ("http", "https"):
+                    return False
+
+                # The provider-host exception is needed for self-hosted IdPs on a LAN,
+                # but it must not turn that hostname into a proxy for arbitrary services
+                # listening on other ports of the same machine. Keep the conventional
+                # HTTP(S) ports and the configured provider port only.
+                provider_port = provider.port or (443 if provider.scheme == "https" else 80)
+                return picture_port in {80, 443, provider_port}
 
         if parsed.scheme != "https":
             self._logger.warning("[OIDC] refusing to fetch profile image over a non-HTTPS URL")
