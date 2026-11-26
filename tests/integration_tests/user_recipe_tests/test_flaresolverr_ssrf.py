@@ -1,6 +1,6 @@
 import json
 
-from mealie.core.settings.settings import get_app_settings
+from mealie.core.config import get_app_settings
 from tests.utils import api_routes
 from tests.utils.fixture_schemas import TestUser
 
