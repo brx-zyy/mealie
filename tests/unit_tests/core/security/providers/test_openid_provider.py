@@ -585,6 +585,24 @@ def test_provider_own_host_is_allowed_on_a_private_network(
     assert requested == [url]
 
 
+def test_provider_own_host_arbitrary_port_is_rejected(
+    _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser
+):
+    """The private-network exception must not expose other services on the IdP host."""
+    _resolve_to(monkeypatch, "192.168.1.10")
+    unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
+
+    url = "http://idp.example.com:18443/internal-health"
+    requested = _patch_network(monkeypatch, [])
+
+    data = _picture_claims(url)
+    data["email"] = unique_user.email
+    assert OpenIDProvider(unique_user.repos.session, data).authenticate() is not None
+
+    # The request hook rejects the port before the transport can connect.
+    assert requested == []
+
+
 def test_oversized_declared_content_length_is_refused(_oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser):
     _resolve_to(monkeypatch, "93.184.216.34")
     unique_user.repos.users.patch(unique_user.user_id, {"external_avatar_hash": None})
