@@ -54,7 +54,7 @@ jobs:
             -e SCRAPER_FLARESOLVERR_TIMEOUT=60 \
             -v "$GITHUB_WORKSPACE:/src" \
             -w /src \
-            mealie-ssrf-proof -c 'pip install pytest && python -m pytest -q -s tests/integration_tests/user_recipe_tests/test_flaresolverr_ssrf.py'
+            mealie-ssrf-proof -c 'pip install pytest pytest-asyncio && python -m pytest -q -s tests/integration_tests/user_recipe_tests/test_flaresolverr_ssrf.py'
           docker logs proof-mock 2>&1 | tee /tmp/mock.log
           grep -q 'GET /challenge' /tmp/mock.log
           grep -q 'PRIVATE_PROOF_REQUEST_RECEIVED path=/proof' /tmp/mock.log
