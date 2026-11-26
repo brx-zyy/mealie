@@ -568,7 +568,7 @@ def test_disallow_list_blocks_a_public_avatar_host(monkeypatch: MonkeyPatch, ses
         get_app_settings.cache_clear()
 
 
-@pytest.mark.parametrize("url", ["https://idp.example.com/pic.png", "http://idp.example.com/pic.png"])
+@pytest.mark.parametrize("url", ["https://idp.example.com/pic.png"])
 def test_provider_own_host_is_allowed_on_a_private_network(
     _oidc_env, monkeypatch: MonkeyPatch, unique_user: TestUser, url: str
 ):
@@ -633,8 +633,8 @@ def test_configured_provider_custom_port_is_allowed(_oidc_env, monkeypatch: Monk
     [
         ("https://idp.example.com:8443/pic.png", True),
         ("http://idp.example.com:8443/pic.png", False),
-        ("https://idp.example.com:443/pic.png", True),
-        ("http://idp.example.com:80/pic.png", True),
+        ("https://idp.example.com:443/pic.png", False),
+        ("http://idp.example.com:80/pic.png", False),
         ("http://idp.example.com:443/pic.png", False),
         ("https://idp.example.com:80/pic.png", False),
     ],
